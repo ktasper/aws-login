@@ -21,9 +21,8 @@ class Environment:
 @dataclass
 class Defaults:
     role_name: str
-    state_account_id: str
     session_duration: int
-    target_account_id: str
+
 
 @dataclass
 class SSL:
@@ -60,6 +59,10 @@ class Config:
     @classmethod
     def from_dict(cls, data: dict) -> 'Config':
         """Parse config from dictionary"""
+        # Parse defaults first so we can use them
+        defaults_data = data.get('defaults', {})
+        default_role = defaults_data.get('role_name')
+
         # Parse profiles
         profiles = {}
         for name, profile_data in data.get('profiles', {}).items():
@@ -76,17 +79,14 @@ class Config:
             environments[name] = Environment(
                 state_account_id=env_data.get('state_account_id'),
                 target_account_id=env_data.get('target_account_id'),
-                role=env_data['role'],
+                role=env_data.get('role') or default_role,  # Use default if not specified
                 session_duration=env_data.get('session_duration')
             )
 
-        # Parse defaults (MOVED OUT of the loop)
-        defaults_data = data.get('defaults', {})
+        # Create defaults object
         defaults = Defaults(
             role_name=defaults_data['role_name'],
-            state_account_id=defaults_data['state_account_id'],
-            session_duration=defaults_data['session_duration'],
-            target_account_id=defaults_data['target_account_id']
+            session_duration=defaults_data['session_duration']
         )
 
         # Parse SSL
@@ -110,18 +110,21 @@ class Config:
 
         env = self.environments[environment_name]
 
-        # Resolve state_account_id FIRST
-        state_account_id = env.state_account_id or self.defaults.state_account_id
+        # Validate required fields
+        if not env.state_account_id:
+            raise ValueError(f"state_account_id is required for environment '{environment_name}'")
 
-        # Resolve target_account_id using the RESOLVED state_account_id
+        if not env.role:
+            raise ValueError(f"role is required for environment '{environment_name}' and no default role_name is set")
+
+        state_account_id = env.state_account_id
+
+        # Resolve target_account_id
         if env.target_account_id:
             target_account_id = env.target_account_id
-        elif env.state_account_id:
-            # If target not specified but state is explicitly set, use state for both
-            target_account_id = env.state_account_id
         else:
-            # If neither target nor state are set, use the resolved state (which includes default)
-            target_account_id = state_account_id
+            # If target not specified, use state account
+            target_account_id = env.state_account_id
 
         # Resolve session_duration with priority:
         session_duration = env.session_duration

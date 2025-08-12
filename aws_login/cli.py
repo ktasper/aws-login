@@ -91,12 +91,47 @@ def login(
         console.print(f"  AWS_REGION={profile_config.region}")
         console.print(f"  TF_VAR_target_account_id={resolved.target_account_id}")
 
+@app.command("list-environments")
+def list_environments(
+    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to config file")
+):
+    """List available environments"""
+    config_obj, _ = load_config(config)
+
+    table = Table(title="Available Environments")
+    table.add_column("Name", style="cyan")
+    table.add_column("Role", style="green")
+    table.add_column("State Account", style="yellow")
+    table.add_column("Target Account", style="blue")
+    table.add_column("Session Duration", style="magenta")
+
+    for name, env in config_obj.environments.items():
+        # Show role with default indicator
+        role_display = env.role
+        if env.role == config_obj.defaults.role_name:
+            role_display = f"{env.role} [dim](default)[/dim]"
+
+        target = env.target_account_id or f"[dim](same as state: {env.state_account_id})[/dim]"
+        duration = f"{env.session_duration}s" if env.session_duration else f"[dim](default: {config_obj.defaults.session_duration}s)[/dim]"
+
+        state_display = env.state_account_id or "[red]REQUIRED[/red]"
+
+        table.add_row(
+            name,
+            role_display,
+            state_display,
+            target,
+            duration
+        )
+
+    console.print(table)
+
 @app.command("list-profiles")
 def list_profiles(
     config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to config file")
 ):
     """List available profiles"""
-    config_obj, _ = load_config(config)
+    config_obj, _ = load_config(config)  # Use 'config' directly
 
     table = Table(title="Available Profiles")
     table.add_column("Name", style="cyan")
@@ -117,37 +152,6 @@ def list_profiles(
 
     console.print(table)
 
-@app.command("list-environments")
-def list_environments(
-    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to config file")
-):
-    """List available environments"""
-    config_obj, _ = load_config(config)
-
-    table = Table(title="Available Environments")
-    table.add_column("Name", style="cyan")
-    table.add_column("Role", style="green")
-    table.add_column("State Account", style="yellow")
-    table.add_column("Target Account", style="blue")
-    table.add_column("Session Duration", style="magenta")
-
-    for name, env in config_obj.environments.items():
-        # Show configured values with fallback indicators
-        state = env.state_account_id or f"(default: {config_obj.defaults.state_account_id})"
-
-        if env.target_account_id:
-            target = env.target_account_id
-        elif env.state_account_id:
-            target = f"(same as state: {env.state_account_id})"
-        else:
-            target = f"(default: {config_obj.defaults.state_account_id})"
-
-        duration = f"{env.session_duration}s" if env.session_duration else f"(default: {config_obj.defaults.session_duration}s)"
-
-        table.add_row(name, env.role, state, target, duration)
-
-    console.print(table)
-
 @app.command()
 def validate(
     config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to config file")
@@ -158,28 +162,28 @@ def validate(
     console.print("🔍 Validating configuration...", style="bold blue")
 
     # Check config file
-    console.print(f"✅ Config file loaded: {config_path}", style="green")
+    console.print(f"[green]PASS[/green] Config file loaded: {config_path}")
 
     # Check aws-adfs
     if check_aws_adfs_exists():
-        console.print("✅ aws-adfs tool found", style="green")
+        console.print("[green]PASS[/green] aws-adfs tool found")
     else:
-        console.print("❌ aws-adfs tool not found in PATH", style="red")
-        console.print("   Install from: https://github.com/venth/aws-adfs", style="yellow")
+        console.print("[red]FAIL[/red] aws-adfs tool not found in PATH")
+        console.print("      Install from: https://github.com/venth/aws-adfs", style="yellow")
 
     # Check SSL certificate
     cert_path = config_obj.expand_path(config_obj.ssl.ca_bundle_path)
     if Path(cert_path).exists():
-        console.print(f"✅ SSL certificate found: {cert_path}", style="green")
+        console.print(f"[green]PASS[/green] SSL certificate found: {cert_path}")
     else:
-        console.print(f"⚠️  SSL certificate not found: {cert_path}", style="yellow")
+        console.print(f"[yellow]WARN[/yellow] SSL certificate not found: {cert_path}")
 
     # Validate environments
     console.print("\n🔧 Validating environments:", style="bold blue")
 
     table = Table()
     table.add_column("Environment", style="cyan")
-    table.add_column("Status", style="green")
+    table.add_column("Status", style="white")
     table.add_column("State → Target", style="yellow")
 
     for name in config_obj.environments.keys():
@@ -187,14 +191,14 @@ def validate(
             resolved = config_obj.resolve_environment(name)
             table.add_row(
                 name,
-                "✅ Valid",
+                "[green]VALID[/green]",
                 f"{resolved.state_account_id} → {resolved.target_account_id}"
             )
         except ValueError as e:
-            table.add_row(name, f"❌ {e}", "")
+            table.add_row(name, f"[red]ERROR[/red]", str(e))
 
     console.print(table)
-    console.print("\n✅ Validation complete!", style="bold green")
+    console.print("\n[green]PASS[/green] Validation complete!", style="bold")
 
 @app.callback()
 def main(

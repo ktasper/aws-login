@@ -4,14 +4,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="aws-login",
-    version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    name="aws-adfs-login-helper",
+    version="1.0.1",
+    author="Karl Webster",
     description="AWS Login Tool - ADFS authentication with YAML configuration",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/aws-login",
+    url="https://github.com/ktasper/aws-login",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
